@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>IDX Scout Pro — Watchlist</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="app-nav"></nav>
+<div id="app-main">
+  <div class="topbar">
+    <div class="topbar-title">Watchlist Saya</div>
+    <div class="topbar-right">
+      <span id="wl-status" class="status-pill sp-cached">● Memuat…</span>
+      <button class="btn btn-secondary btn-sm" onclick="loadWL()">↻ Refresh</button>
+    </div>
+  </div>
+  <div class="page">
+   <div class="page-scroll">
+
+    <!-- ADD TICKER -->
+    <div class="section">
+      <div class="section-header"><div class="section-title">Tambah Saham</div></div>
+      <div class="section-body">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="addTicker" placeholder="Kode saham (BBCA)" style="width:150px;text-transform:uppercase" maxlength="6"
+            onkeydown="if(event.key==='Enter')addToWL()" oninput="this.value=this.value.toUpperCase()">
+          <button class="btn btn-primary btn-sm" onclick="addToWL()">+ Tambah</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="section" id="wlStats" style="display:none">
+      <div class="section-body">
+        <div class="metrics-grid" id="wlMetrics"></div>
+      </div>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div class="section" id="wlEmpty">
+      <div class="section-body">
+        <div style="text-align:center;padding:40px;color:var(--text3);">
+          <div style="font-size:40px;margin-bottom:12px;opacity:0.2">☆</div>
+          <div style="font-size:13px;margin-bottom:6px;">Watchlist kosong</div>
+          <div style="font-size:11px">Tambahkan saham dari Screener atau ketik kode di atas</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WATCHLIST TABLE -->
+    <div class="section" id="wlTableSection" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Portofolio Pantau</div>
+        <span class="badge badge-gray" id="wlCount">0 saham</span>
+      </div>
+      <div class="section-body no-pad">
+        <div class="tbl-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Emiten</th><th>Harga</th><th>%Hari</th><th>Open</th><th>High</th><th>Low</th>
+              <th>Volume</th><th>RSI</th><th>+DI</th><th>-DI</th><th>ADX</th><th>Sinyal</th><th>Chart</th><th>Hapus</th>
+            </tr></thead>
+            <tbody id="wlBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALERT SECTION -->
+    <div class="section" id="wlAlerts" style="display:none">
+      <div class="section-header">
+        <div class="section-title">⚡ Alert Watchlist</div>
+        <span class="badge badge-red" id="alertCount">0</span>
+      </div>
+      <div class="section-body no-pad" id="alertBody">
+        <div class="loading-wrap" style="color:var(--text3)">Tidak ada alert aktif</div>
+      </div>
+    </div>
+
+   </div>
+  </div>
+</div>
+<div id="global-toast" class="g-toast"></div>
+<script src="shared.js"></script>
+<script>
+renderNav('watchlist');
+
+let wlData = [];
+
+function addToWL() {
+  const t = document.getElementById('addTicker').value.trim().toUpperCase();
+  if (!t) return;
+  if (WL.has(t)) { showToast(t+' sudah ada di watchlist','amber'); return; }
+  WL.toggle(t);
+  document.getElementById('addTicker').value='';
+  showToast(t+' ditambahkan','green');
+  loadWL();
+}
+
+function removeFromWL(t) {
+  WL.toggle(t);
+  showToast(t+' dihapus','red');
+  loadWL();
+}
+
+async function loadWL() {
+  const tickers = WL.load();
+  document.getElementById('wlCount').textContent = tickers.length+' saham';
+
+  if (!tickers.length) {
+    document.getElementById('wlEmpty').style.display='';
+    document.getElementById('wlTableSection').style.display='none';
+    document.getElementById('wlStats').style.display='none';
+    document.getElementById('wlAlerts').style.display='none';
+    return;
+  }
+
+  document.getElementById('wlEmpty').style.display='none';
+  document.getElementById('wl-status').textContent='● Memuat…';
+  document.getElementById('wlBody').innerHTML='<tr><td colspan="14"><div class="loading-wrap"><div class="spinner"></div>Memuat data real…</div></td></tr>';
+
+  const quotes = await IDX.fetchQuotes(tickers);
+  const histResults = {};
+  for (const t of tickers) {
+    try { histResults[t] = await IDX.fetchHistory(t,'3mo','1d'); } catch(e){}
+    await new Promise(r=>setTimeout(r,150));
+  }
+
+  wlData = tickers.map(t=>{
+    const q=quotes[t];if(!q)return null;
+    const hist=histResults[t]||[];
+    const closes=hist.map(d=>d.close);
+    const highs=hist.map(d=>d.high);
+    const lows=hist.map(d=>d.low);
+    const rsiArr=closes.length>14?IDX.calcRSI(closes):[];
+    const rsi=rsiArr.filter(v=>v!==null).slice(-1)[0]||0;
+    const dmi=closes.length>14?IDX.calcDMI(highs,lows,closes):{pdi:[],mdi:[],adx:[]};
+    const pdi=dmi.pdi.filter(v=>v!==null).slice(-1)[0]||0;
+    const mdi=dmi.mdi.filter(v=>v!==null).slice(-1)[0]||0;
+    const adx=dmi.adx.filter(v=>v!==null).slice(-1)[0]||0;
+    let signal='NEUTRAL';
+    if(adx>25)signal=pdi>mdi?'BUY':'SELL';
+    else if(adx>18)signal='HOLD';
+    return{...q,ticker:t,rsi,pdi,mdi,adx,signal};
+  }).filter(Boolean);
+
+  renderWLStats();
+  renderWLTable();
+  renderAlerts();
+
+  ['wlStats','wlTableSection','wlAlerts'].forEach(id=>document.getElementById(id).style.display='');
+  document.getElementById('wl-status').textContent=IDX.isMarketOpen()?'● Live (Delayed ~15m)':'● Data Penutupan';
+  document.getElementById('wl-status').className='status-pill '+(IDX.isMarketOpen()?'sp-live':'sp-closed');
+}
+
+function renderWLStats(){
+  const d=wlData;
+  const avgChg=d.reduce((a,s)=>a+s.changePct,0)/d.length;
+  document.getElementById('wlMetrics').innerHTML=`
+    <div class="metric-card"><div class="mc-label">Saham Dipantau</div><div class="mc-val">${d.length}</div></div>
+    <div class="metric-card"><div class="mc-label">Avg Perubahan</div><div class="mc-val ${avgChg>=0?'up':'down'}">${avgChg>=0?'+':''}${avgChg.toFixed(2)}%</div></div>
+    <div class="metric-card"><div class="mc-label">Naik</div><div class="mc-val up">${d.filter(s=>s.changePct>0).length}</div></div>
+    <div class="metric-card"><div class="mc-label">Turun</div><div class="mc-val down">${d.filter(s=>s.changePct<0).length}</div></div>
+    <div class="metric-card"><div class="mc-label">Sinyal BUY</div><div class="mc-val up">${d.filter(s=>s.signal==='BUY').length}</div></div>
+    <div class="metric-card"><div class="mc-label">Sinyal SELL</div><div class="mc-val down">${d.filter(s=>s.signal==='SELL').length}</div></div>
+  `;
+}
+
+function renderWLTable(){
+  document.getElementById('wlBody').innerHTML=wlData.map(s=>{
+    const up=s.changePct>=0;
+    const rsiC=s.rsi<30?'badge-blue':s.rsi>70?'badge-red':'badge-gray';
+    const sigH=s.signal==='BUY'?'<span class="signal-badge sb-buy">▲ BUY</span>':s.signal==='SELL'?'<span class="signal-badge sb-sell">▼ SELL</span>':s.signal==='HOLD'?'<span class="signal-badge sb-hold">—HOLD</span>':'<span class="signal-badge sb-neutral">·</span>';
+    return`<tr>
+      <td><div style="font-weight:700;font-size:12px">${s.ticker}</div><div style="font-size:9px;color:var(--text3)">${(s.name||'').substring(0,18)}</div></td>
+      <td style="font-family:'DM Mono',monospace;font-weight:500">${IDX.fmt(s.price)}</td>
+      <td style="font-family:'DM Mono',monospace;color:${up?'var(--green)':'var(--red)'}">${up?'+':''}${s.changePct.toFixed(2)}%</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--text2)">${IDX.fmt(s.open)}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--green)">${IDX.fmt(s.high)}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--red)">${IDX.fmt(s.low)}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--text2)">${IDX.fmtK(s.volume)}</td>
+      <td><span class="badge ${rsiC}">${s.rsi.toFixed(1)}</span></td>
+      <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">${s.pdi.toFixed(1)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--red)">${s.mdi.toFixed(1)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--blue)">${s.adx.toFixed(1)}</td>
+      <td>${sigH}</td>
+      <td><a href="chart.html?t=${s.ticker}" class="btn btn-secondary btn-sm" style="text-decoration:none;font-size:10px">Chart</a></td>
+      <td><button class="btn btn-secondary btn-sm" style="color:var(--red);font-size:11px" onclick="removeFromWL('${s.ticker}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAlerts(){
+  const alerts=[];
+  wlData.forEach(s=>{
+    if(s.signal==='BUY'&&s.adx>25)alerts.push({t:s.ticker,type:'buy',msg:`BUY signal — +DI ${s.pdi.toFixed(1)} > -DI ${s.mdi.toFixed(1)}, ADX ${s.adx.toFixed(1)}`});
+    if(s.signal==='SELL'&&s.adx>25)alerts.push({t:s.ticker,type:'sell',msg:`SELL signal — -DI ${s.mdi.toFixed(1)} > +DI ${s.pdi.toFixed(1)}, ADX ${s.adx.toFixed(1)}`});
+    if(s.rsi<30)alerts.push({t:s.ticker,type:'buy',msg:`RSI Oversold: ${s.rsi.toFixed(1)} — potensi rebound`});
+    if(s.rsi>70)alerts.push({t:s.ticker,type:'sell',msg:`RSI Overbought: ${s.rsi.toFixed(1)} — waspada koreksi`});
+    if(s.changePct>5)alerts.push({t:s.ticker,type:'buy',msg:`Naik tajam hari ini: +${s.changePct.toFixed(2)}%`});
+    if(s.changePct<-5)alerts.push({t:s.ticker,type:'sell',msg:`Turun tajam hari ini: ${s.changePct.toFixed(2)}%`});
+  });
+  document.getElementById('alertCount').textContent=alerts.length;
+  if(!alerts.length){
+    document.getElementById('alertBody').innerHTML='<div class="loading-wrap" style="color:var(--text3)">Tidak ada alert aktif</div>';
+    return;
+  }
+  const colors={buy:'var(--green)',sell:'var(--red)'};
+  document.getElementById('alertBody').innerHTML=alerts.map(a=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="window.location='chart.html?t=${a.t}'">
+      <div style="width:3px;height:28px;background:${colors[a.type]};border-radius:3px;flex-shrink:0;"></div>
+      <div style="font-weight:700;font-size:12px;width:50px;flex-shrink:0">${a.t}</div>
+      <div style="font-size:11px;color:var(--text2)">${a.msg}</div>
+      <div style="margin-left:auto;font-size:10px;color:var(--text3)">→ Chart</div>
+    </div>`).join('');
+}
+
+function scheduleRefresh(){
+  if(IDX.isMarketOpen()){setTimeout(()=>{loadWL();scheduleRefresh();},5*60*1000);}
+  else{setTimeout(scheduleRefresh,60*1000);}
+}
+
+// Init with default watchlist if empty
+if(!WL.load().length) {
+  ['BBCA','BBRI','TLKM','ASII','ADRO'].forEach(t=>WL.toggle(t));
+}
+loadWL();
+scheduleRefresh();
+</script>
+</body>
+</html>

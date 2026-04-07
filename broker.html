@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>IDX Scout Pro — Broker Summary</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.broker-bar-row{display:grid;grid-template-columns:140px 1fr 1fr 80px 80px 80px;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;}
+.broker-bar-row:last-child{border-bottom:none;}
+.bbar-buy{height:10px;border-radius:2px;background:var(--green);min-width:2px;}
+.bbar-sell{height:10px;border-radius:2px;background:var(--red);min-width:2px;}
+.bbar-wrap{display:flex;flex-direction:column;gap:3px;}
+.type-tag{display:inline-block;font-size:8px;padding:1px 5px;border-radius:10px;font-family:'DM Mono',monospace;}
+.type-asing{background:var(--purple-dim);color:var(--purple);}
+.type-dom{background:rgba(255,255,255,0.05);color:var(--text3);}
+</style>
+</head>
+<body>
+<nav id="app-nav"></nav>
+<div id="app-main">
+
+  <div class="topbar">
+    <div class="topbar-title">Broker Summary</div>
+    <div class="topbar-right">
+      <span id="bk-status" class="status-pill sp-cached">● Simulasi</span>
+      <span style="font-size:10px;color:var(--text3)">Data broker IDX tidak tersedia via API publik — data simulasi realistis</span>
+    </div>
+  </div>
+
+  <div class="page">
+   <div class="page-scroll">
+
+    <!-- TICKER SELECTOR -->
+    <div class="section">
+      <div class="section-header"><div class="section-title">Pilih Saham</div></div>
+      <div class="section-body">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="bkTicker" value="BBCA" style="width:100px;font-size:13px;font-weight:700;text-transform:uppercase" maxlength="6"
+            onkeydown="if(event.key==='Enter')loadBroker()" oninput="this.value=this.value.toUpperCase()">
+          <button class="btn btn-primary btn-sm" onclick="loadBroker()">Tampilkan</button>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            ${['BBCA','BBRI','BMRI','TLKM','ASII','ADRO','GOTO','ANTM','INCO'].map(t=>`<button class="qt" onclick="selectBk('${t}')">${t}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUMMARY METRICS -->
+    <div class="section" id="bkMetrics" style="display:none">
+      <div class="section-header">
+        <div class="section-title" id="bkMetTitle">—</div>
+        <div style="font-size:10px;color:var(--text3)" id="bkDate">—</div>
+      </div>
+      <div class="section-body">
+        <div class="metrics-grid" id="bkMetGrid"></div>
+      </div>
+    </div>
+
+    <!-- BROKER TABLE -->
+    <div class="section" id="bkTableSection" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Aktivitas Broker Hari Ini</div>
+        <div class="section-tabs" style="border:none;margin:0;">
+          <button class="stab active" onclick="showBkTab('all',this)">Semua</button>
+          <button class="stab" onclick="showBkTab('asing',this)">Asing</button>
+          <button class="stab" onclick="showBkTab('dom',this)">Domestik</button>
+          <button class="stab" onclick="showBkTab('buy',this)">Net Beli</button>
+          <button class="stab" onclick="showBkTab('sell',this)">Net Jual</button>
+        </div>
+      </div>
+      <div class="section-body no-pad" style="padding:0 18px;">
+        <!-- Header -->
+        <div class="broker-bar-row" style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:1px;text-transform:uppercase;border-bottom:2px solid var(--border2);">
+          <span>Broker</span><span>Beli</span><span>Jual</span>
+          <span style="text-align:right">Beli (lot)</span><span style="text-align:right">Jual (lot)</span><span style="text-align:right">Net</span>
+        </div>
+        <div id="bkTableBody"></div>
+      </div>
+    </div>
+
+    <!-- NET BROKER CHART -->
+    <div class="section" id="bkChartSection" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Net Broker (Beli − Jual) — Top 15</div>
+      </div>
+      <div class="section-body">
+        <div style="height:280px;position:relative;"><canvas id="bkNetChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TIMELINE 1 TAHUN -->
+    <div class="section" id="bkTimelineSection" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Aktivitas Broker — Timeline 1 Tahun</div>
+        <div class="chart-controls">
+          <button class="period-btn active" onclick="setTL(30,this)">1 Bulan</button>
+          <button class="period-btn" onclick="setTL(90,this)">3 Bulan</button>
+          <button class="period-btn" onclick="setTL(180,this)">6 Bulan</button>
+          <button class="period-btn" onclick="setTL(365,this)">1 Tahun</button>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="section-tabs" style="margin:-16px -18px 16px;padding:0 18px;border-bottom:1px solid var(--border);">
+          <button class="stab active" onclick="showTLTab('flow',this)">Net Flow Asing vs Domestik</button>
+          <button class="stab" onclick="showTLTab('top3',this)">Top 3 Broker Activity</button>
+          <button class="stab" onclick="showTLTab('cumnet',this)">Net Kumulatif</button>
+        </div>
+        <div id="tlTabFlow" style="display:block"><div style="height:240px;position:relative;"><canvas id="tlFlowChart"></canvas></div></div>
+        <div id="tlTabTop3" style="display:none"><div style="height:240px;position:relative;"><canvas id="tlTop3Chart"></canvas></div></div>
+        <div id="tlTabCumnet" style="display:none"><div style="height:240px;position:relative;"><canvas id="tlCumChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- DAILY BROKSUM TABLE -->
+    <div class="section" id="bkDailySection" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Ringkasan Harian Broker — 30 Hari Terakhir</div>
+      </div>
+      <div class="section-body no-pad">
+        <div class="tbl-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Tanggal</th><th>Vol Beli (lot)</th><th>Vol Jual (lot)</th>
+              <th>Net</th><th>Net Asing</th><th>Net Domestik</th><th>Top Broker Beli</th><th>Top Broker Jual</th><th>Interpretasi</th>
+            </tr></thead>
+            <tbody id="bkDailyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+   </div>
+  </div>
+</div>
+<div id="global-toast" class="g-toast"></div>
+<script src="shared.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+renderNav('broker');
+
+const BROKERS_ASING = ['Credit Suisse','UBS','Merrill Lynch','Morgan Stanley','CLSA','Macquarie','Deutsche Bank','Goldman Sachs','JP Morgan','Citigroup'];
+const BROKERS_DOM = ['BNI Sekuritas','Mandiri Sekuritas','BCA Sekuritas','Mirae Asset','Sinarmas Sekuritas','Trimegah','Samuel Sekuritas','Phillip Sekuritas','Henan Putihrai','Indo Premier'];
+const ALL_BROKERS = [...BROKERS_ASING, ...BROKERS_DOM];
+
+let bkCharts = {};
+let allBrokerData = [];
+let timelineData = [];
+let activeTLDays = 30;
+let activeTicker = 'BBCA';
+let activeBkFilter = 'all';
+
+function destBkChart(k) { if(bkCharts[k]){try{bkCharts[k].destroy();}catch(e){}delete bkCharts[k];} }
+
+// Generate deterministic broker data from price history
+function genBrokerDayData(seed, totalVol) {
+  const r = IDX.rng(seed);
+  return ALL_BROKERS.map(name => {
+    const base = r() * totalVol / ALL_BROKERS.length;
+    const buy = Math.round(base * (0.5 + r() * 0.5));
+    const sell = Math.round(base * (0.5 + r() * 0.5));
+    return { name, buy, sell, net: buy-sell, asing: BROKERS_ASING.includes(name) };
+  }).sort((a,b) => Math.abs(b.net)-Math.abs(a.net));
+}
+
+function genTimeline(seedBase, days) {
+  const r = IDX.rng(seedBase);
+  const result = [];
+  for (let i = days; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    if (d.getDay()===0||d.getDay()===6) continue;
+    const dayVol = Math.round(500000 + r()*2000000);
+    const dayBrokers = genBrokerDayData(seedBase*i+37, dayVol);
+    const netAsing = dayBrokers.filter(b=>b.asing).reduce((a,b)=>a+b.net,0);
+    const netDom = dayBrokers.filter(b=>!b.asing).reduce((a,b)=>a+b.net,0);
+    const totalBuy = dayBrokers.reduce((a,b)=>a+b.buy,0);
+    const totalSell = dayBrokers.reduce((a,b)=>a+b.sell,0);
+    const topBuy = [...dayBrokers].sort((a,b)=>b.buy-a.buy)[0];
+    const topSell = [...dayBrokers].sort((a,b)=>b.sell-a.sell)[0];
+    result.push({
+      date: d.toLocaleDateString('id-ID',{day:'2-digit',month:'short'}),
+      dateObj: d,
+      totalBuy, totalSell, net: totalBuy-totalSell,
+      netAsing, netDom,
+      topBuy: topBuy?.name.split(' ')[0]||'—',
+      topSell: topSell?.name.split(' ')[0]||'—',
+      brokers: dayBrokers,
+    });
+    if (result.length >= days) break;
+  }
+  return result;
+}
+
+function selectBk(t) {
+  document.getElementById('bkTicker').value = t;
+  document.querySelectorAll('.qt').forEach(b=>b.classList.toggle('active',b.textContent===t));
+  loadBroker();
+}
+
+async function loadBroker() {
+  const t = document.getElementById('bkTicker').value.trim().toUpperCase();
+  if (!t) return;
+  activeTicker = t;
+  document.getElementById('bk-status').textContent='● Memuat…';
+
+  try {
+    const hist = await IDX.fetchHistory(t, '1y', '1d');
+    const seed = t.split('').reduce((a,c)=>a+c.charCodeAt(0),0) * 1337;
+    const latestVol = hist.length ? hist[hist.length-1].volume : 1000000;
+    allBrokerData = genBrokerDayData(seed + Date.now()/86400000|0, latestVol);
+    timelineData = genTimeline(seed, 365);
+
+    const quote = await IDX.fetchQuote(t);
+    document.getElementById('bkMetTitle').textContent = (quote?.name||t)+' ('+t+'.JK)';
+    document.getElementById('bkDate').textContent = IDX.getWIBDate();
+
+    renderBkMetrics();
+    renderBkTable();
+    renderBkNetChart();
+    renderTimeline();
+    renderDailyTable();
+
+    ['bkMetrics','bkTableSection','bkChartSection','bkTimelineSection','bkDailySection'].forEach(id=>document.getElementById(id).style.display='');
+    document.getElementById('bk-status').textContent='● Data Simulasi (Realistis)';
+    document.getElementById('bk-status').className='status-pill sp-cached';
+  } catch(e) {
+    showToast('Gagal memuat: '+e.message,'red');
+  }
+}
+
+function renderBkMetrics() {
+  const totalBuy = allBrokerData.reduce((a,b)=>a+b.buy,0);
+  const totalSell = allBrokerData.reduce((a,b)=>a+b.sell,0);
+  const net = totalBuy-totalSell;
+  const netAsing = allBrokerData.filter(b=>b.asing).reduce((a,b)=>a+b.net,0);
+  const netDom = allBrokerData.filter(b=>!b.asing).reduce((a,b)=>a+b.net,0);
+  const topBuy = [...allBrokerData].sort((a,b)=>b.buy-a.buy)[0];
+  const topSell = [...allBrokerData].sort((a,b)=>b.sell-a.sell)[0];
+  document.getElementById('bkMetGrid').innerHTML = `
+    <div class="metric-card"><div class="mc-label">Total Beli</div><div class="mc-val up">${IDX.fmtK(totalBuy)}</div><div class="mc-sub">lot hari ini</div></div>
+    <div class="metric-card"><div class="mc-label">Total Jual</div><div class="mc-val down">${IDX.fmtK(totalSell)}</div><div class="mc-sub">lot hari ini</div></div>
+    <div class="metric-card"><div class="mc-label">Net Flow</div><div class="mc-val ${net>=0?'up':'down'}">${net>=0?'+':''}${IDX.fmtK(net)}</div></div>
+    <div class="metric-card"><div class="mc-label">Net Asing</div><div class="mc-val ${netAsing>=0?'up':'down'}">${netAsing>=0?'+':''}${IDX.fmtK(netAsing)}</div></div>
+    <div class="metric-card"><div class="mc-label">Net Domestik</div><div class="mc-val ${netDom>=0?'up':'down'}">${netDom>=0?'+':''}${IDX.fmtK(netDom)}</div></div>
+    <div class="metric-card"><div class="mc-label">Top Broker Beli</div><div class="mc-val" style="font-size:11px">${topBuy?.name.split(' ').slice(0,2).join(' ')||'—'}</div></div>
+    <div class="metric-card"><div class="mc-label">Top Broker Jual</div><div class="mc-val" style="font-size:11px">${topSell?.name.split(' ').slice(0,2).join(' ')||'—'}</div></div>
+  `;
+}
+
+function showBkTab(filter, btn) {
+  activeBkFilter = filter;
+  document.querySelectorAll('#bkTableSection .stab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderBkTable();
+}
+
+function renderBkTable() {
+  let data = [...allBrokerData];
+  if (activeBkFilter==='asing') data=data.filter(b=>b.asing);
+  else if (activeBkFilter==='dom') data=data.filter(b=>!b.asing);
+  else if (activeBkFilter==='buy') data=data.filter(b=>b.net>0).sort((a,b)=>b.net-a.net);
+  else if (activeBkFilter==='sell') data=data.filter(b=>b.net<0).sort((a,b)=>a.net-b.net);
+
+  const maxBuy = Math.max(...data.map(b=>b.buy));
+  const maxSell = Math.max(...data.map(b=>b.sell));
+
+  document.getElementById('bkTableBody').innerHTML = data.map(b=>{
+    const bw = Math.max(2, Math.round(b.buy/maxBuy*200));
+    const sw = Math.max(2, Math.round(b.sell/maxSell*200));
+    const netColor = b.net>0?'var(--green)':b.net<0?'var(--red)':'var(--text2)';
+    return `<div class="broker-bar-row">
+      <div>
+        <div style="font-size:11px;font-weight:500">${b.name.split(' ').slice(0,2).join(' ')}</div>
+        <span class="type-tag ${b.asing?'type-asing':'type-dom'}">${b.asing?'Asing':'Domestik'}</span>
+      </div>
+      <div class="bbar-wrap">
+        <div style="font-size:9px;color:var(--text3)">Beli</div>
+        <div class="bbar-buy" style="width:${bw}px"></div>
+      </div>
+      <div class="bbar-wrap">
+        <div style="font-size:9px;color:var(--text3)">Jual</div>
+        <div class="bbar-sell" style="width:${sw}px"></div>
+      </div>
+      <div style="text-align:right;font-family:'DM Mono',monospace;font-size:10px;color:var(--green)">${IDX.fmtK(b.buy)}</div>
+      <div style="text-align:right;font-family:'DM Mono',monospace;font-size:10px;color:var(--red)">${IDX.fmtK(b.sell)}</div>
+      <div style="text-align:right;font-family:'DM Mono',monospace;font-size:10px;color:${netColor}">${b.net>=0?'+':''}${IDX.fmtK(b.net)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderBkNetChart() {
+  destBkChart('bknet');
+  const top15 = [...allBrokerData].sort((a,b)=>b.net-a.net).slice(0,7)
+    .concat([...allBrokerData].sort((a,b)=>a.net-b.net).slice(0,7))
+    .sort((a,b)=>b.net-a.net);
+
+  bkCharts.bknet = new Chart(document.getElementById('bkNetChart').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:top15.map(b=>b.name.split(' ')[0]),
+      datasets:[{
+        data:top15.map(b=>b.net),
+        backgroundColor:top15.map(b=>b.net>=0?'rgba(0,201,122,0.75)':'rgba(255,61,90,0.75)'),
+        borderRadius:3,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Net: ${c.raw>=0?'+':''}${IDX.fmtK(c.raw)} lot`}}},
+      scales:{
+        x:{ticks:{color:'#404a5e',font:{size:9}},grid:{color:'rgba(255,255,255,0.03)'}},
+        y:{ticks:{color:'#404a5e',font:{size:9},callback:v=>IDX.fmtK(v)},grid:{color:'rgba(255,255,255,0.03)'}}
+      }
+    }
+  });
+}
+
+function showTLTab(tab, btn) {
+  document.querySelectorAll('#bkTimelineSection .stab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  ['flow','top3','cumnet'].forEach(t=>{ document.getElementById('tlTab'+t.charAt(0).toUpperCase()+t.slice(1)).style.display = t===tab?'block':'none'; });
+  renderTimeline();
+}
+
+function setTL(days, btn) {
+  document.querySelectorAll('#bkTimelineSection .period-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  activeTLDays = days;
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const data = timelineData.slice(-activeTLDays);
+  const labels = data.map(d=>d.date);
+
+  destBkChart('tlflow'); destBkChart('tltop3'); destBkChart('tlcum');
+
+  // Flow chart
+  bkCharts.tlflow = new Chart(document.getElementById('tlFlowChart').getContext('2d'),{
+    type:'bar',
+    data:{labels, datasets:[
+      {label:'Net Asing',data:data.map(d=>d.netAsing),backgroundColor:data.map(d=>d.netAsing>=0?'rgba(166,127,255,0.7)':'rgba(255,61,90,0.5)'),stack:'a'},
+      {label:'Net Dom',data:data.map(d=>d.netDom),backgroundColor:data.map(d=>d.netDom>=0?'rgba(61,155,255,0.6)':'rgba(255,61,90,0.4)'),stack:'b'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7a8499',font:{size:9}}}},
+      scales:{x:{ticks:{color:'#404a5e',font:{size:8},maxTicksLimit:12}},y:{ticks:{color:'#404a5e',font:{size:9},callback:v=>IDX.fmtK(v)}}}}
+  });
+
+  // Top 3 brokers by total volume
+  const top3 = [...allBrokerData].sort((a,b)=>(b.buy+b.sell)-(a.buy+a.sell)).slice(0,3);
+  bkCharts.tltop3 = new Chart(document.getElementById('tlTop3Chart').getContext('2d'),{
+    type:'line',
+    data:{labels, datasets:top3.map((b,i)=>{
+      const colors=['#00c97a','#3d9bff','#f5a623'];
+      const r=IDX.rng(b.name.length*999+i);
+      return {
+        label:b.name.split(' ')[0],
+        data:data.map(d=>Math.round(d.totalBuy*(0.1+r()*0.15))),
+        borderColor:colors[i],borderWidth:1.5,pointRadius:0,tension:0.3,
+      };
+    })},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7a8499',font:{size:9}}}},
+      scales:{x:{ticks:{color:'#404a5e',font:{size:8},maxTicksLimit:12}},y:{ticks:{color:'#404a5e',font:{size:9},callback:v=>IDX.fmtK(v)}}}}
+  });
+
+  // Cumulative net
+  let cum=0;const cumData=data.map(d=>{cum+=d.net;return cum;});
+  bkCharts.tlcum = new Chart(document.getElementById('tlCumChart').getContext('2d'),{
+    type:'line',
+    data:{labels, datasets:[{label:'Net Kumulatif',data:cumData,borderColor:'#f5a623',borderWidth:1.5,pointRadius:0,tension:0.3,fill:true,backgroundColor:'rgba(245,166,35,0.07)'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#404a5e',font:{size:8},maxTicksLimit:12}},y:{ticks:{color:'#404a5e',font:{size:9},callback:v=>IDX.fmtK(v)}}}}
+  });
+}
+
+function renderDailyTable() {
+  const last30 = timelineData.slice(-30).reverse();
+  document.getElementById('bkDailyBody').innerHTML = last30.map(d=>{
+    const netC = d.net>=0?'var(--green)':'var(--red)';
+    const asingC = d.netAsing>=0?'var(--green)':'var(--red)';
+    const domC = d.netDom>=0?'var(--green)':'var(--red)';
+    let interp = d.net>50000?'<span class="badge badge-green">Beli Kuat</span>':d.net<-50000?'<span class="badge badge-red">Jual Kuat</span>':'<span class="badge badge-gray">Netral</span>';
+    if (d.netAsing>30000) interp+=' <span class="badge badge-purple" style="font-size:8px">Asing Masuk</span>';
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace">${d.date}</td>
+      <td style="color:var(--green);font-family:'DM Mono',monospace">${IDX.fmtK(d.totalBuy)}</td>
+      <td style="color:var(--red);font-family:'DM Mono',monospace">${IDX.fmtK(d.totalSell)}</td>
+      <td style="color:${netC};font-family:'DM Mono',monospace">${d.net>=0?'+':''}${IDX.fmtK(d.net)}</td>
+      <td style="color:${asingC};font-family:'DM Mono',monospace">${d.netAsing>=0?'+':''}${IDX.fmtK(d.netAsing)}</td>
+      <td style="color:${domC};font-family:'DM Mono',monospace">${d.netDom>=0?'+':''}${IDX.fmtK(d.netDom)}</td>
+      <td style="font-size:10px">${d.topBuy}</td>
+      <td style="font-size:10px">${d.topSell}</td>
+      <td>${interp}</td>
+    </tr>`;
+  }).join('');
+}
+
+// INIT
+const urlT = new URLSearchParams(location.search).get('t');
+if (urlT) document.getElementById('bkTicker').value = urlT.toUpperCase();
+document.querySelectorAll('.qt').forEach(b=>b.classList.toggle('active',b.textContent===(urlT||'BBCA')));
+loadBroker();
+</script>
+</body>
+</html>

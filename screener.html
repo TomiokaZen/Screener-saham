@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>IDX Scout Pro — Screener</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="app-nav"></nav>
+<div id="app-main">
+  <div class="topbar">
+    <div class="topbar-title">Screener Saham IDX</div>
+    <div class="topbar-right">
+      <span id="sc-status" class="status-pill sp-cached">● Memuat…</span>
+      <button class="btn btn-secondary btn-sm" onclick="runScreener()">↻ Refresh Data</button>
+    </div>
+  </div>
+  <div class="page">
+   <div class="page-scroll">
+
+    <!-- FILTER SECTION -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">⊟ Filter Screener</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="applyFilter()">🔍 Jalankan</button>
+          <button class="btn btn-secondary btn-sm" onclick="resetFilter()">Reset</button>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="filter-row">
+          <div class="filter-field"><label>Sektor</label>
+            <select id="f-sec" style="width:130px">
+              <option value="">Semua</option>
+              <option>Perbankan</option><option>Energi</option><option>Konsumer</option>
+              <option>Infrastruktur</option><option>Properti</option><option>Telekomunikasi</option>
+              <option>Tambang</option><option>Kesehatan</option><option>Teknologi</option><option>Keuangan</option>
+            </select>
+          </div>
+          <div class="filter-field"><label>Harga Min</label><input type="number" id="f-pmin" placeholder="0" style="width:90px"></div>
+          <div class="filter-field"><label>Harga Max</label><input type="number" id="f-pmax" placeholder="∞" style="width:90px"></div>
+          <div class="filter-field"><label>% Hari Min</label><input type="number" id="f-cmin" placeholder="-∞" step="0.1" style="width:80px"></div>
+          <div class="filter-field"><label>% Hari Max</label><input type="number" id="f-cmax" placeholder="∞" step="0.1" style="width:80px"></div>
+          <div class="filter-field"><label>Vol Min (lot)</label><input type="number" id="f-vmin" placeholder="0" style="width:100px"></div>
+          <div class="filter-field"><label>Sinyal DMI</label>
+            <select id="f-sig" style="width:100px"><option value="">Semua</option><option value="BUY">BUY</option><option value="SELL">SELL</option></select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="section">
+      <div class="section-body">
+        <div class="metrics-grid" id="scStats">
+          <div class="loading-wrap" style="grid-column:1/-1"><div class="spinner"></div>Memuat…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">Hasil Screener</div>
+        <span class="badge badge-gray" id="scCount">—</span>
+      </div>
+      <div class="section-body no-pad">
+        <div class="tbl-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th onclick="srt('ticker')">Emiten↕</th>
+              <th onclick="srt('price')">Harga↕</th>
+              <th onclick="srt('changePct')">%Hari↕</th>
+              <th onclick="srt('volume')">Volume↕</th>
+              <th>Sektor</th>
+              <th onclick="srt('rsi')">RSI↕</th>
+              <th onclick="srt('pdi')">+DI↕</th>
+              <th onclick="srt('mdi')">-DI↕</th>
+              <th onclick="srt('adx')">ADX↕</th>
+              <th>Sinyal</th>
+              <th>Chart</th>
+              <th>Aksi</th>
+            </tr></thead>
+            <tbody id="scBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+   </div>
+  </div>
+</div>
+<div id="global-toast" class="g-toast"></div>
+<script src="shared.js"></script>
+<script>
+renderNav('screener');
+
+const STOCK_LIST = [
+  {ticker:'BBCA',sector:'Perbankan'},{ticker:'BBRI',sector:'Perbankan'},{ticker:'BMRI',sector:'Perbankan'},
+  {ticker:'BBNI',sector:'Perbankan'},{ticker:'BNGA',sector:'Perbankan'},{ticker:'BJBR',sector:'Perbankan'},
+  {ticker:'TLKM',sector:'Telekomunikasi'},{ticker:'EXCL',sector:'Telekomunikasi'},{ticker:'ISAT',sector:'Telekomunikasi'},
+  {ticker:'ASII',sector:'Konsumer'},{ticker:'UNVR',sector:'Konsumer'},{ticker:'ICBP',sector:'Konsumer'},
+  {ticker:'INDF',sector:'Konsumer'},{ticker:'MYOR',sector:'Konsumer'},{ticker:'HMSP',sector:'Konsumer'},
+  {ticker:'GGRM',sector:'Konsumer'},{ticker:'ACES',sector:'Konsumer'},
+  {ticker:'ADRO',sector:'Tambang'},{ticker:'PTBA',sector:'Tambang'},{ticker:'INCO',sector:'Tambang'},
+  {ticker:'ANTM',sector:'Tambang'},{ticker:'MDKA',sector:'Tambang'},{ticker:'UNTR',sector:'Tambang'},
+  {ticker:'KLBF',sector:'Kesehatan'},{ticker:'SIDO',sector:'Kesehatan'},{ticker:'MIKA',sector:'Kesehatan'},
+  {ticker:'PGAS',sector:'Energi'},{ticker:'AKRA',sector:'Energi'},{ticker:'ELSA',sector:'Energi'},
+  {ticker:'BSDE',sector:'Properti'},{ticker:'CTRA',sector:'Properti'},{ticker:'PWON',sector:'Properti'},
+  {ticker:'JSMR',sector:'Infrastruktur'},{ticker:'TOWR',sector:'Infrastruktur'},{ticker:'WIKA',sector:'Infrastruktur'},
+  {ticker:'GOTO',sector:'Teknologi'},{ticker:'BUKA',sector:'Teknologi'},{ticker:'EMTK',sector:'Teknologi'},
+  {ticker:'BFIN',sector:'Keuangan'},{ticker:'ADMF',sector:'Keuangan'},{ticker:'SRTG',sector:'Keuangan'},
+];
+
+let allData = [], filteredData = [], sortKey=null, sortDir=1;
+
+function spark(close, high, low) {
+  const w=60,h=20;if(!close||!close.length)return'—';
+  const mn=Math.min(...close),mx=Math.max(...close),range=mx-mn||1;
+  const pts=close.map((v,i)=>`${(i/(close.length-1))*w},${h-((v-mn)/range)*h}`).join(' ');
+  const up=close[close.length-1]>=close[0];
+  return`<svg width="${w}" height="${h}"><polyline points="${pts}" fill="none" stroke="${up?'#00c97a':'#ff3d5a'}" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+async function runScreener() {
+  document.getElementById('sc-status').textContent='● Memuat…';
+  document.getElementById('scBody').innerHTML='<tr><td colspan="12"><div class="loading-wrap"><div class="spinner"></div>Mengambil data real dari Yahoo Finance…</div></td></tr>';
+
+  // Fetch all quotes in parallel
+  const tickers = STOCK_LIST.map(s=>s.ticker);
+  const quotes = await IDX.fetchQuotes(tickers);
+
+  // Fetch 3-month history for technical indicators
+  const histResults = {};
+  const batches = [];
+  for (let i=0;i<tickers.length;i+=5) batches.push(tickers.slice(i,i+5));
+  for (const batch of batches) {
+    await Promise.all(batch.map(async t=>{
+      try { histResults[t] = await IDX.fetchHistory(t,'3mo','1d'); } catch(e){}
+    }));
+    await new Promise(r=>setTimeout(r,200));
+  }
+
+  allData = STOCK_LIST.map(s=>{
+    const q = quotes[s.ticker];
+    const hist = histResults[s.ticker]||[];
+    const closes = hist.map(d=>d.close);
+    const highs = hist.map(d=>d.high);
+    const lows = hist.map(d=>d.low);
+
+    const rsiArr = closes.length>14 ? IDX.calcRSI(closes) : [];
+    const rsi = rsiArr.filter(v=>v!==null).slice(-1)[0] || 0;
+    const dmi = closes.length>14 ? IDX.calcDMI(highs,lows,closes) : {pdi:[],mdi:[],adx:[]};
+    const pdi = dmi.pdi.filter(v=>v!==null).slice(-1)[0] || 0;
+    const mdi = dmi.mdi.filter(v=>v!==null).slice(-1)[0] || 0;
+    const adx = dmi.adx.filter(v=>v!==null).slice(-1)[0] || 0;
+    let signal = 'NEUTRAL';
+    if (adx>25) signal = pdi>mdi?'BUY':'SELL';
+    else if (adx>18) signal='HOLD';
+
+    const last20 = closes.slice(-20);
+    return {
+      ticker: s.ticker, sector: s.sector,
+      name: q?.name || s.ticker,
+      price: q?.price || 0,
+      changePct: q?.changePct || 0,
+      change: q?.change || 0,
+      volume: q?.volume || 0,
+      rsi, pdi, mdi, adx, signal,
+      spark: last20,
+    };
+  }).filter(s=>s.price>0);
+
+  filteredData = [...allData];
+  renderTable();
+  renderStats();
+  document.getElementById('sc-status').textContent = IDX.isMarketOpen()?'● Live (Delayed ~15m)':'● Data Penutupan';
+  document.getElementById('sc-status').className='status-pill '+(IDX.isMarketOpen()?'sp-live':'sp-closed');
+}
+
+function applyFilter() {
+  const sec=document.getElementById('f-sec').value;
+  const pMin=+document.getElementById('f-pmin').value||0;
+  const pMax=+document.getElementById('f-pmax').value||Infinity;
+  const cMin=document.getElementById('f-cmin').value!==''?+document.getElementById('f-cmin').value:-Infinity;
+  const cMax=document.getElementById('f-cmax').value!==''?+document.getElementById('f-cmax').value:Infinity;
+  const vMin=+document.getElementById('f-vmin').value||0;
+  const sig=document.getElementById('f-sig').value;
+  filteredData=allData.filter(s=>{
+    if(sec&&s.sector!==sec)return false;
+    if(s.price<pMin||s.price>pMax)return false;
+    if(s.changePct<cMin||s.changePct>cMax)return false;
+    if(s.volume<vMin)return false;
+    if(sig&&s.signal!==sig)return false;
+    return true;
+  });
+  renderTable();
+  renderStats();
+}
+
+function resetFilter(){
+  ['f-sec','f-sig'].forEach(id=>document.getElementById(id).value='');
+  ['f-pmin','f-pmax','f-cmin','f-cmax','f-vmin'].forEach(id=>document.getElementById(id).value='');
+  filteredData=[...allData];renderTable();renderStats();
+}
+
+function srt(key){
+  if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=1;}
+  filteredData.sort((a,b)=>typeof a[key]==='string'?sortDir*a[key].localeCompare(b[key]):sortDir*(a[key]-b[key]));
+  renderTable();
+}
+
+function renderStats(){
+  const d=filteredData;
+  document.getElementById('scStats').innerHTML=`
+    <div class="metric-card"><div class="mc-label">Hasil</div><div class="mc-val">${d.length}</div></div>
+    <div class="metric-card"><div class="mc-label">BUY</div><div class="mc-val up">${d.filter(s=>s.signal==='BUY').length}</div></div>
+    <div class="metric-card"><div class="mc-label">SELL</div><div class="mc-val down">${d.filter(s=>s.signal==='SELL').length}</div></div>
+    <div class="metric-card"><div class="mc-label">Avg RSI</div><div class="mc-val">${d.length?(d.reduce((a,s)=>a+s.rsi,0)/d.length).toFixed(1):'—'}</div></div>
+    <div class="metric-card"><div class="mc-label">Naik Hari Ini</div><div class="mc-val up">${d.filter(s=>s.changePct>0).length}</div></div>
+    <div class="metric-card"><div class="mc-label">Turun Hari Ini</div><div class="mc-val down">${d.filter(s=>s.changePct<0).length}</div></div>
+    <div class="metric-card"><div class="mc-label">ADX &gt;25</div><div class="mc-val">${d.filter(s=>s.adx>25).length}</div></div>
+  `;
+  document.getElementById('scCount').textContent=d.length+' saham';
+}
+
+function renderTable(){
+  const tb=document.getElementById('scBody');
+  if(!filteredData.length){tb.innerHTML='<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text3)">Tidak ada data sesuai filter</td></tr>';return;}
+  tb.innerHTML=filteredData.map(s=>{
+    const up=s.changePct>=0;
+    const rsiC=s.rsi<30?'badge-blue':s.rsi>70?'badge-red':'badge-gray';
+    const sigH=s.signal==='BUY'?'<span class="signal-badge sb-buy">▲ BUY</span>':s.signal==='SELL'?'<span class="signal-badge sb-sell">▼ SELL</span>':s.signal==='HOLD'?'<span class="signal-badge sb-hold">— HOLD</span>':'<span class="signal-badge sb-neutral">·</span>';
+    const wl=WL.has(s.ticker);
+    return`<tr>
+      <td><div style="font-weight:700;font-size:12px">${s.ticker}</div><div style="font-size:9px;color:var(--text3)">${(s.name||'').substring(0,20)}</div></td>
+      <td style="font-family:'DM Mono',monospace;font-weight:500">${IDX.fmt(s.price)}</td>
+      <td style="font-family:'DM Mono',monospace;color:${up?'var(--green)':'var(--red)'}">${up?'+':''}${s.changePct.toFixed(2)}%</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--text2)">${IDX.fmtK(s.volume)}</td>
+      <td><span class="badge badge-gray" style="font-size:8px">${s.sector}</span></td>
+      <td><span class="badge ${rsiC}">${s.rsi.toFixed(1)}</span></td>
+      <td style="font-family:'DM Mono',monospace;color:var(--green)">${s.pdi.toFixed(1)}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--red)">${s.mdi.toFixed(1)}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--blue)">${s.adx.toFixed(1)}</td>
+      <td>${sigH}</td>
+      <td>${spark(s.spark)}</td>
+      <td style="display:flex;gap:4px;">
+        <a href="chart.html?t=${s.ticker}" class="btn btn-secondary btn-sm" style="text-decoration:none">Chart</a>
+        <button class="btn btn-secondary btn-sm ${wl?'':''}",style="${wl?'color:var(--amber)':''}" onclick="toggleWLBtn('${s.ticker}',this)">${wl?'★':'☆'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleWLBtn(t,btn){
+  const added=WL.toggle(t);
+  btn.textContent=added?'★':'☆';
+  btn.style.color=added?'var(--amber)':'';
+  showToast(added?`${t} ditambahkan ke watchlist`:`${t} dihapus`,'green');
+}
+
+// Auto-refresh
+function scheduleRefresh(){
+  if(IDX.isMarketOpen()){setTimeout(()=>{runScreener();scheduleRefresh();},5*60*1000);}
+  else{setTimeout(scheduleRefresh,60*1000);}
+}
+
+runScreener();
+scheduleRefresh();
+</script>
+</body>
+</html>

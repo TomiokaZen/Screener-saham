@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>IDX Scout Pro — Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="app-nav"></nav>
+<div id="app-main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-title">Dashboard</div>
+    <div class="topbar-right">
+      <span id="data-status" class="status-pill sp-cached">● Memuat…</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)" id="last-fetch">—</span>
+    </div>
+  </div>
+
+  <!-- TICKER BAR -->
+  <div class="ticker-bar" id="tickerBar">
+    <div class="ticker-item"><span class="t-name">IHSG</span><span class="t-val" id="tb-ihsg">—</span><span class="t-chg" id="tb-ihsg-chg">—</span></div>
+    <div class="ticker-item"><span class="t-name">LQ45</span><span class="t-val" id="tb-lq45">—</span><span class="t-chg" id="tb-lq45-chg">—</span></div>
+    <div class="ticker-item"><span class="t-name">USD/IDR</span><span class="t-val" id="tb-usd">—</span><span class="t-chg" id="tb-usd-chg">—</span></div>
+    <div class="ticker-item"><span class="t-name">BBCA</span><span class="t-val" id="tb-bbca">—</span><span class="t-chg" id="tb-bbca-chg">—</span></div>
+    <div class="ticker-item"><span class="t-name">BBRI</span><span class="t-val" id="tb-bbri">—</span><span class="t-chg" id="tb-bbri-chg">—</span></div>
+    <div class="ticker-item"><span class="t-name">TLKM</span><span class="t-val" id="tb-tlkm">—</span><span class="t-chg" id="tb-tlkm-chg">—</span></div>
+  </div>
+
+  <div class="page">
+   <div class="page-scroll">
+
+    <!-- MARKET OVERVIEW -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title"><span class="section-icon">◈</span> Market Overview</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-size:10px;color:var(--text3)" id="market-session">—</span>
+          <button class="btn btn-secondary btn-sm" onclick="loadAll()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="metrics-grid" id="marketMetrics">
+          <div class="loading-wrap" style="grid-column:1/-1"><div class="spinner"></div>Memuat data…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOP MOVERS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title"><span style="color:var(--green)">▲</span> Top Gainers</div>
+        </div>
+        <div class="section-body no-pad">
+          <div id="topGainers"><div class="loading-wrap"><div class="spinner"></div></div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title"><span style="color:var(--red)">▼</span> Top Losers</div>
+        </div>
+        <div class="section-body no-pad">
+          <div id="topLosers"><div class="loading-wrap"><div class="spinner"></div></div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SECTOR PERFORMANCE -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title"><span class="section-icon">⊞</span> Performa Sektor Hari Ini</div>
+      </div>
+      <div class="section-body">
+        <div id="sectorPerf"><div class="loading-wrap"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <!-- IHSG MINI CHART -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title"><span class="section-icon">◱</span> IHSG — Grafik Intraday</div>
+        <div style="font-size:10px;color:var(--text3)">Data delayed ~15 menit</div>
+      </div>
+      <div class="section-body">
+        <div id="ihsgChartWrap" style="height:200px;position:relative;">
+          <canvas id="ihsgChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALERT SIGNALS -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title"><span class="section-icon">⚡</span> Sinyal Aktif</div>
+        <span class="badge badge-red" id="signalCount">0</span>
+      </div>
+      <div class="section-body no-pad">
+        <div id="signalList"><div class="loading-wrap"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+   </div>
+  </div>
+</div>
+<div id="global-toast" class="g-toast"></div>
+<script src="shared.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+renderNav('index');
+
+// ---- SECTOR DATA (simulated from real sector indices) ----
+const SECTOR_TICKERS = {
+  'Perbankan': ['BBCA','BBRI','BMRI','BBNI','BNGA'],
+  'Energi': ['PGAS','AKRA','ELSA'],
+  'Tambang': ['ADRO','PTBA','INCO','ANTM','UNTR'],
+  'Konsumer': ['ASII','UNVR','ICBP','MYOR','HMSP'],
+  'Properti': ['BSDE','CTRA','PWON'],
+  'Infrastruktur': ['JSMR','TOWR','WIKA'],
+  'Telekomunikasi': ['TLKM','EXCL','ISAT'],
+  'Kesehatan': ['KLBF','SIDO','MIKA'],
+  'Teknologi': ['GOTO','BUKA','EMTK'],
+  'Keuangan': ['BFIN','ADMF','SRTG'],
+};
+
+let quoteData = {};
+let ihsgChartInst = null;
+
+// ---- INDEX TICKERS ----
+const INDEX_TICKERS = [
+  {id:'tb-ihsg',chg:'tb-ihsg-chg',t:'^JKSE',label:'IHSG'},
+  {id:'tb-lq45',chg:'tb-lq45-chg',t:'^JKLQ45',label:'LQ45'},
+  {id:'tb-usd',chg:'tb-usd-chg',t:'IDR=X',label:'USD/IDR'},
+  {id:'tb-bbca',chg:'tb-bbca-chg',t:'BBCA',label:'BBCA'},
+  {id:'tb-bbri',chg:'tb-bbri-chg',t:'BBRI',label:'BBRI'},
+  {id:'tb-tlkm',chg:'tb-tlkm-chg',t:'TLKM',label:'TLKM'},
+];
+
+async function fetchIndex(sym) {
+  try {
+    const suffix = sym.startsWith('^') || sym.endsWith('=X') ? '' : '.JK';
+    const url = `${IDX.YF_BASE}/v8/finance/chart/${sym}${suffix}?interval=1d&range=1d`;
+    const data = await IDX.fetchProxy(url);
+    const meta = data.chart.result[0].meta;
+    return {
+      price: meta.regularMarketPrice,
+      prev: meta.chartPreviousClose || meta.previousClose,
+    };
+  } catch(e) { return null; }
+}
+
+async function loadTickerBar() {
+  for (const item of INDEX_TICKERS) {
+    fetchIndex(item.t).then(d => {
+      if (!d) return;
+      const el = document.getElementById(item.id);
+      const chgEl = document.getElementById(item.chg);
+      if (!el || !chgEl) return;
+      const pct = d.prev > 0 ? (d.price - d.prev) / d.prev * 100 : 0;
+      el.textContent = item.t === 'IDR=X'
+        ? d.price.toLocaleString('id-ID', {maximumFractionDigits:0})
+        : d.price.toLocaleString('id-ID', {minimumFractionDigits:0});
+      chgEl.textContent = (pct>=0?'+':'')+pct.toFixed(2)+'%';
+      chgEl.className = 't-chg '+(pct>=0?'up':'down');
+    });
+  }
+}
+
+async function loadAll() {
+  const isOpen = IDX.isMarketOpen();
+  const statusEl = document.getElementById('data-status');
+  statusEl.textContent = '● Memuat…'; statusEl.className = 'status-pill sp-cached';
+
+  const allTickers = [...new Set(Object.values(SECTOR_TICKERS).flat())];
+  try {
+    quoteData = await IDX.fetchQuotes(allTickers);
+    document.getElementById('last-fetch').textContent = 'Update: '+IDX.getWIBTime();
+    statusEl.textContent = isOpen ? '● LIVE (Delayed ~15m)' : '● Data Penutupan';
+    statusEl.className = 'status-pill '+(isOpen?'sp-live':'sp-closed');
+  } catch(e) {
+    statusEl.textContent = '⚠ Gagal memuat'; statusEl.className = 'status-pill sp-cached';
+  }
+
+  renderMarketMetrics();
+  renderTopMovers();
+  renderSectorPerf();
+  renderSignals();
+  loadIHSGChart();
+
+  // Session info
+  const wib = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));
+  const h=wib.getHours(), m=wib.getMinutes();
+  let session = 'Pra-Sesi';
+  if (h >= 9 && h < 12) session = 'Sesi I (09:00–12:00)';
+  else if (h >= 13 && h < 16) session = 'Sesi II (13:30–16:00)';
+  else if (h >= 16) session = 'After Hours (Bursa Tutup)';
+  document.getElementById('market-session').textContent = session;
+}
+
+function renderMarketMetrics() {
+  const vals = Object.values(quoteData);
+  if (!vals.length) return;
+  const advances = vals.filter(q=>q.changePct>0).length;
+  const declines = vals.filter(q=>q.changePct<0).length;
+  const totalVol = vals.reduce((a,q)=>a+q.volume,0);
+  const avgChg = vals.reduce((a,q)=>a+q.changePct,0)/vals.length;
+
+  document.getElementById('marketMetrics').innerHTML = `
+    <div class="metric-card"><div class="mc-label">Emiten Naik</div><div class="mc-val up">${advances}</div><div class="mc-sub">dari ${vals.length} saham</div></div>
+    <div class="metric-card"><div class="mc-label">Emiten Turun</div><div class="mc-val down">${declines}</div><div class="mc-sub">dari ${vals.length} saham</div></div>
+    <div class="metric-card"><div class="mc-label">Avg Perubahan</div><div class="mc-val ${avgChg>=0?'up':'down'}">${avgChg>=0?'+':''}${avgChg.toFixed(2)}%</div></div>
+    <div class="metric-card"><div class="mc-label">Total Volume</div><div class="mc-val">${IDX.fmtK(totalVol)}</div><div class="mc-sub">lot hari ini</div></div>
+    <div class="metric-card"><div class="mc-label">Data</div><div class="mc-val" style="font-size:12px;">${IDX.isMarketOpen()?'Live':'Penutupan'}</div><div class="mc-sub">${IDX.getWIBDate()}</div></div>
+  `;
+}
+
+function renderTopMovers() {
+  const vals = Object.values(quoteData);
+  const sorted = [...vals].sort((a,b)=>b.changePct-a.changePct);
+  const gainers = sorted.slice(0,6);
+  const losers = sorted.slice(-6).reverse();
+
+  function moverRow(q) {
+    const up = q.changePct >= 0;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 18px;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-weight:700;font-size:12px">${q.ticker}</div>
+        <div style="font-size:9px;color:var(--text3)">${(q.name||'').substring(0,28)}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500">${IDX.fmt(q.price)}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:${up?'var(--green)':'var(--red)'}">${up?'+':''}${q.changePct.toFixed(2)}%</div>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('topGainers').innerHTML = gainers.map(moverRow).join('') || '<div class="loading-wrap">Tidak ada data</div>';
+  document.getElementById('topLosers').innerHTML = losers.map(moverRow).join('') || '<div class="loading-wrap">Tidak ada data</div>';
+}
+
+function renderSectorPerf() {
+  const sectorsData = Object.entries(SECTOR_TICKERS).map(([name, tickers]) => {
+    const quotes = tickers.map(t=>quoteData[t]).filter(Boolean);
+    const avg = quotes.length ? quotes.reduce((a,q)=>a+q.changePct,0)/quotes.length : 0;
+    return { name, avg, count: quotes.length };
+  }).sort((a,b)=>b.avg-a.avg);
+
+  const maxAbs = Math.max(...sectorsData.map(s=>Math.abs(s.avg)), 0.01);
+  document.getElementById('sectorPerf').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;">
+    ${sectorsData.map(s=>{
+      const up = s.avg >= 0;
+      const w = Math.min(100, (Math.abs(s.avg)/maxAbs)*100);
+      return `<div style="display:grid;grid-template-columns:120px 1fr 60px;align-items:center;gap:10px;">
+        <span style="font-size:11px;color:var(--text2)">${s.name}</span>
+        <div style="background:var(--bg3);border-radius:3px;height:8px;overflow:hidden;">
+          <div style="height:100%;width:${w}%;background:${up?'var(--green)':'var(--red)'};border-radius:3px;"></div>
+        </div>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:${up?'var(--green)':'var(--red)'};text-align:right">${up?'+':''}${s.avg.toFixed(2)}%</span>
+      </div>`;
+    }).join('')}
+    </div>`;
+}
+
+async function loadIHSGChart() {
+  try {
+    const url = `${IDX.YF_BASE}/v8/finance/chart/^JKSE?interval=5m&range=1d`;
+    const data = await IDX.fetchProxy(url);
+    const r = data.chart.result[0];
+    const ts = r.timestamp || [];
+    const q = r.indicators.quote[0];
+    const points = ts.map((t,i)=>({
+      x: new Date(t*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}),
+      y: +(q.close[i]||0).toFixed(2)
+    })).filter(p=>p.y>0);
+
+    if (ihsgChartInst) { ihsgChartInst.destroy(); ihsgChartInst=null; }
+    const ctx = document.getElementById('ihsgChart').getContext('2d');
+    const first = points[0]?.y || 0;
+    const isUp = (points[points.length-1]?.y || 0) >= first;
+    ihsgChartInst = new Chart(ctx, {
+      type:'line',
+      data:{
+        labels: points.map(p=>p.x),
+        datasets:[{
+          data: points.map(p=>p.y),
+          borderColor: isUp?'#00c97a':'#ff3d5a',
+          borderWidth:1.5, pointRadius:0, tension:0.2,
+          fill:true,
+          backgroundColor: ctx => {
+            const g = ctx.chart.ctx.createLinearGradient(0,0,0,200);
+            g.addColorStop(0, isUp?'rgba(0,201,122,0.15)':'rgba(255,61,90,0.15)');
+            g.addColorStop(1,'rgba(0,0,0,0)');
+            return g;
+          }
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'IHSG: '+c.raw.toLocaleString('id-ID')}}},
+        scales:{
+          x:{ticks:{color:'#404a5e',font:{size:9},maxTicksLimit:8},grid:{color:'rgba(255,255,255,0.03)'}},
+          y:{ticks:{color:'#404a5e',font:{size:9},callback:v=>v.toLocaleString('id-ID')},grid:{color:'rgba(255,255,255,0.03)'}}
+        }
+      }
+    });
+  } catch(e) { document.getElementById('ihsgChartWrap').innerHTML = '<div class="loading-wrap">Grafik tidak tersedia (market tutup)</div>'; }
+}
+
+function renderSignals() {
+  const signals = [];
+  Object.values(quoteData).forEach(q=>{
+    if (q.changePct > 4) signals.push({t:q.ticker,type:'buy',msg:`Naik kuat ${q.changePct.toFixed(2)}% hari ini`,price:q.price});
+    if (q.changePct < -4) signals.push({t:q.ticker,type:'sell',msg:`Turun tajam ${q.changePct.toFixed(2)}% hari ini`,price:q.price});
+    if (q.volume > 2000000) signals.push({t:q.ticker,type:'vol',msg:`Volume sangat tinggi: ${IDX.fmtK(q.volume)} lot`,price:q.price});
+  });
+  document.getElementById('signalCount').textContent = signals.length;
+  if (!signals.length) {
+    document.getElementById('signalList').innerHTML = '<div class="loading-wrap" style="color:var(--text3)">Tidak ada sinyal aktif</div>';
+    return;
+  }
+  const colors = {buy:'var(--green)',sell:'var(--red)',vol:'var(--amber)'};
+  document.getElementById('signalList').innerHTML = signals.slice(0,10).map(s=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="window.location='chart.html?t=${s.t}'">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:3px;height:30px;background:${colors[s.type]};border-radius:3px;flex-shrink:0;"></div>
+        <div>
+          <div style="font-weight:700;font-size:12px">${s.t}</div>
+          <div style="font-size:10px;color:var(--text2)">${s.msg}</div>
+        </div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:12px">${IDX.fmt(s.price)}</div>
+    </div>`).join('');
+}
+
+// ---- AUTO REFRESH ----
+function scheduleRefresh() {
+  if (IDX.isMarketOpen()) {
+    setTimeout(()=>{ loadAll(); scheduleRefresh(); }, 5*60*1000); // 5min during hours
+  } else {
+    // Check at market open
+    const wib = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));
+    const nextOpen = new Date(wib);
+    nextOpen.setHours(9,0,0,0);
+    if (wib > nextOpen) nextOpen.setDate(nextOpen.getDate()+1);
+    const ms = nextOpen - wib;
+    setTimeout(()=>{ loadAll(); scheduleRefresh(); }, Math.min(ms, 60*60*1000));
+  }
+}
+
+// INIT
+loadTickerBar();
+loadAll();
+scheduleRefresh();
+setInterval(loadTickerBar, 60*1000); // update ticker every 1min
+</script>
+</body>
+</html>

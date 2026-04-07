@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>IDX Scout Pro — Chart</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.chart-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:12px;overflow:hidden;}
+.chart-panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);}
+.chart-panel-title{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text2);text-transform:uppercase;}
+.chart-panel-body{padding:0;}
+.ohlcv-info{display:flex;gap:16px;flex-wrap:wrap;font-family:'DM Mono',monospace;font-size:10px;}
+.oi-item{display:flex;gap:5px;}
+.oi-label{color:var(--text3);}
+.oi-val{color:var(--text);}
+.ticker-search{display:flex;gap:8px;align-items:center;}
+.ticker-search input{width:100px;font-size:13px;font-weight:700;text-transform:uppercase;}
+.quick-tickers{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;}
+.qt{padding:2px 8px;font-size:10px;border:1px solid var(--border);border-radius:20px;cursor:pointer;color:var(--text2);background:transparent;font-family:'DM Mono',monospace;transition:all 0.15s;}
+.qt:hover{border-color:var(--border2);color:var(--text);}
+.qt.active{background:var(--green-dim);border-color:rgba(0,201,122,0.4);color:var(--green);}
+</style>
+</head>
+<body>
+<nav id="app-nav"></nav>
+<div id="app-main">
+
+  <div class="topbar">
+    <div class="topbar-title">Chart &amp; Indikator Teknikal</div>
+    <div class="topbar-right">
+      <span id="chart-status" class="status-pill sp-cached">● Memuat…</span>
+      <span id="chart-lastupdate" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)">—</span>
+    </div>
+  </div>
+
+  <div class="page">
+   <div class="page-scroll">
+
+    <!-- SECTION 1: TICKER SELECTOR -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">Pilih Saham</div>
+      </div>
+      <div class="section-body">
+        <div class="ticker-search">
+          <input type="text" id="tickerInput" placeholder="BBCA" maxlength="6"
+            onkeydown="if(event.key==='Enter')loadChart()"
+            oninput="this.value=this.value.toUpperCase()">
+          <button class="btn btn-primary btn-sm" onclick="loadChart()">Tampilkan</button>
+          <div style="flex:1;"></div>
+          <div class="chart-controls">
+            <button class="period-btn active" id="pb-1y" onclick="setPeriod('1y','1d',this)">1T</button>
+            <button class="period-btn" id="pb-6m" onclick="setPeriod('6mo','1d',this)">6B</button>
+            <button class="period-btn" id="pb-3m" onclick="setPeriod('3mo','1d',this)">3B</button>
+            <button class="period-btn" id="pb-1m" onclick="setPeriod('1mo','1d',this)">1B</button>
+            <button class="period-btn" id="pb-5d" onclick="setPeriod('5d','30m',this)">5H</button>
+            <button class="period-btn" id="pb-1d" onclick="setPeriod('1d','5m',this)">1H</button>
+          </div>
+        </div>
+        <div class="quick-tickers" id="quickTickers">
+          ${['BBCA','BBRI','BMRI','TLKM','ASII','ADRO','ANTM','GOTO','INCO','PTBA','UNTR','KLBF'].map(t=>`<button class="qt" onclick="selectTicker('${t}')">${t}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2: PRICE INFO -->
+    <div class="section" id="priceInfoSection" style="display:none">
+      <div class="section-header">
+        <div>
+          <div style="font-size:16px;font-weight:700" id="stockTitle">—</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px" id="stockSub">—</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:500" id="stockPrice">—</div>
+          <div style="font-family:'DM Mono',monospace;font-size:12px;" id="stockChange">—</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="ohlcv-info" id="ohlcvInfo"></div>
+      </div>
+    </div>
+
+    <!-- SECTION 3: MAIN CANDLESTICK + VOLUME -->
+    <div class="chart-panel" id="mainChartPanel" style="display:none">
+      <div class="chart-panel-header">
+        <div class="chart-panel-title">Candlestick + Volume</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="indic-btn active" id="ibMA" onclick="toggleIndic('MA',this)">MA</button>
+          <button class="indic-btn active" id="ibBB" onclick="toggleIndic('BB',this)">Bollinger</button>
+          <span style="font-size:9px;color:var(--text3)">hover untuk detail OHLCV</span>
+        </div>
+      </div>
+      <div class="chart-panel-body">
+        <div style="height:360px;position:relative;"><canvas id="mainChart"></canvas></div>
+        <div style="height:100px;position:relative;border-top:1px solid var(--border);"><canvas id="volChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- SECTION 4: RSI -->
+    <div class="chart-panel" id="rsiPanel" style="display:none">
+      <div class="chart-panel-header">
+        <div class="chart-panel-title">RSI (14)</div>
+        <div style="display:flex;gap:10px;font-size:10px;font-family:'DM Mono',monospace;">
+          <span style="color:var(--green)">70 = Overbought</span>
+          <span style="color:var(--red)">30 = Oversold</span>
+          <span id="rsiCurrent" style="color:var(--text)">—</span>
+        </div>
+      </div>
+      <div class="chart-panel-body"><div style="height:120px;position:relative;"><canvas id="rsiChart"></canvas></div></div>
+    </div>
+
+    <!-- SECTION 5: MACD -->
+    <div class="chart-panel" id="macdPanel" style="display:none">
+      <div class="chart-panel-header">
+        <div class="chart-panel-title">MACD (12,26,9)</div>
+        <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3)">
+          <span style="color:var(--blue)">— MACD</span>&nbsp;
+          <span style="color:var(--amber)">— Signal</span>&nbsp;
+          <span id="macdCurrent">—</span>
+        </div>
+      </div>
+      <div class="chart-panel-body"><div style="height:120px;position:relative;"><canvas id="macdChart"></canvas></div></div>
+    </div>
+
+    <!-- SECTION 6: DMI / ADX -->
+    <div class="chart-panel" id="dmiPanel" style="display:none">
+      <div class="chart-panel-header">
+        <div class="chart-panel-title">DMI / ADX (14)</div>
+        <div style="display:flex;gap:10px;font-size:10px;font-family:'DM Mono',monospace;">
+          <span style="color:var(--green)">+DI: <span id="pdiCurrent">—</span></span>
+          <span style="color:var(--red)">-DI: <span id="mdiCurrent">—</span></span>
+          <span style="color:var(--blue)">ADX: <span id="adxCurrent">—</span></span>
+          <span id="dmiSignal">—</span>
+        </div>
+      </div>
+      <div class="chart-panel-body"><div style="height:120px;position:relative;"><canvas id="dmiChart"></canvas></div></div>
+    </div>
+
+   </div>
+  </div>
+</div>
+<div id="global-toast" class="g-toast"></div>
+<script src="shared.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+renderNav('chart');
+
+let currentTicker = '';
+let currentPeriod = '1y';
+let currentInterval = '1d';
+let histData = [];
+let charts = {};
+let indicators = {MA:true, BB:true};
+
+// Read URL param
+const urlT = new URLSearchParams(location.search).get('t');
+if (urlT) { document.getElementById('tickerInput').value = urlT.toUpperCase(); }
+
+function destroyAll() {
+  Object.values(charts).forEach(c=>{ try{c.destroy();}catch(e){} });
+  charts = {};
+}
+
+function setPeriod(period, interval, btn) {
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentPeriod = period;
+  currentInterval = interval;
+  if (currentTicker) loadChart();
+}
+
+function selectTicker(t) {
+  document.getElementById('tickerInput').value = t;
+  document.querySelectorAll('.qt').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.qt').forEach(b=>{ if(b.textContent===t) b.classList.add('active'); });
+  loadChart();
+}
+
+function toggleIndic(name, btn) {
+  indicators[name] = !indicators[name];
+  btn.classList.toggle('active', indicators[name]);
+  if (histData.length) renderCharts(histData);
+}
+
+async function loadChart() {
+  const t = document.getElementById('tickerInput').value.trim().toUpperCase();
+  if (!t) return;
+  currentTicker = t;
+
+  const statusEl = document.getElementById('chart-status');
+  statusEl.textContent = '● Memuat…'; statusEl.className = 'status-pill sp-cached';
+
+  // Show loading
+  ['mainChartPanel','rsiPanel','macdPanel','dmiPanel'].forEach(id=>{
+    document.getElementById(id).style.display='none';
+  });
+
+  try {
+    // Fetch quote + history in parallel
+    const [quote, hist] = await Promise.all([
+      IDX.fetchQuote(t),
+      IDX.fetchHistory(t, currentPeriod, currentInterval)
+    ]);
+
+    if (!hist.length) { showToast(`Data untuk ${t} tidak tersedia`,'red'); return; }
+    histData = hist;
+
+    // Price info
+    if (quote) {
+      const up = quote.changePct >= 0;
+      document.getElementById('priceInfoSection').style.display = '';
+      document.getElementById('stockTitle').textContent = quote.name || t;
+      document.getElementById('stockSub').textContent = `${t}.JK · IDX · ${IDX.getWIBDate()}`;
+      document.getElementById('stockPrice').textContent = 'Rp '+IDX.fmt(quote.price);
+      document.getElementById('stockPrice').style.color = up?'var(--green)':'var(--red)';
+      const changeEl = document.getElementById('stockChange');
+      changeEl.textContent = `${up?'+':''}${IDX.fmt(quote.change)} (${up?'+':''}${quote.changePct.toFixed(2)}%)`;
+      changeEl.style.color = up?'var(--green)':'var(--red)';
+      document.getElementById('ohlcvInfo').innerHTML = [
+        ['Open', IDX.fmt(quote.open)],
+        ['High', IDX.fmt(quote.high)],
+        ['Low', IDX.fmt(quote.low)],
+        ['Prev Close', IDX.fmt(quote.prevClose)],
+        ['Volume', IDX.fmtK(quote.volume)+' lot'],
+      ].map(([l,v])=>`<div class="oi-item"><span class="oi-label">${l}</span><span class="oi-val">${v}</span></div>`).join('');
+    }
+
+    renderCharts(hist);
+
+    statusEl.textContent = IDX.isMarketOpen()?'● Live (Delayed ~15m)':'● Data Penutupan';
+    statusEl.className = 'status-pill '+(IDX.isMarketOpen()?'sp-live':'sp-closed');
+    document.getElementById('chart-lastupdate').textContent = 'Update: '+IDX.getWIBTime();
+    document.getElementById('chart-lastupdate').textContent = 'Update: '+IDX.getWIBTime();
+
+  } catch(e) {
+    showToast('Gagal memuat data: '+e.message, 'red');
+    statusEl.textContent = '⚠ Error'; statusEl.className='status-pill sp-cached';
+  }
+}
+
+function renderCharts(data) {
+  destroyAll();
+  const closes = data.map(d=>d.close);
+  const highs = data.map(d=>d.high);
+  const lows = data.map(d=>d.low);
+  const volumes = data.map(d=>d.volume);
+  const labels = data.map(d=>{
+    const dt = new Date(d.time*1000);
+    if (currentInterval==='1d') return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'short',timeZone:'Asia/Jakarta'});
+    return dt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'});
+  });
+
+  // INDICATORS
+  const ma20 = IDX.calcSMA(closes, 20);
+  const ma50 = IDX.calcSMA(closes, 50);
+  const ma200 = IDX.calcSMA(closes, 200);
+  const bb = IDX.calcBollinger(closes, 20);
+  const rsi = IDX.calcRSI(closes);
+  const {macd, signal:macdSig, histogram} = IDX.calcMACD(closes);
+  const {pdi, mdi, adx} = IDX.calcDMI(highs, lows, closes);
+
+  const gOpts = {
+    responsive:true, maintainAspectRatio:false,
+    animation:false,
+    interaction:{intersect:false,mode:'index'},
+    plugins:{legend:{display:false},tooltip:{callbacks:{}}},
+    scales:{
+      x:{ticks:{color:'#404a5e',font:{size:8},maxTicksLimit:10},grid:{color:'rgba(255,255,255,0.03)'}},
+      y:{ticks:{color:'#404a5e',font:{size:9}},grid:{color:'rgba(255,255,255,0.04)'},position:'right'}
+    }
+  };
+
+  // ---- MAIN CANDLESTICK (simulate with line for now, real candlestick with custom plugin) ----
+  const datasets = [
+    { label:'Close', data:closes, borderColor:'rgba(255,255,255,0.5)', borderWidth:1.2, pointRadius:0, tension:0 },
+  ];
+  if (indicators.MA) {
+    datasets.push({label:'MA20',data:ma20,borderColor:'#f5a623',borderWidth:1,pointRadius:0,tension:0.2});
+    datasets.push({label:'MA50',data:ma50,borderColor:'#3d9bff',borderWidth:1,pointRadius:0,tension:0.2});
+    if (closes.length > 200) datasets.push({label:'MA200',data:ma200,borderColor:'#a67fff',borderWidth:1,pointRadius:0,tension:0.2});
+  }
+  if (indicators.BB) {
+    datasets.push({label:'BB Upper',data:bb.map(b=>b.upper),borderColor:'rgba(61,155,255,0.4)',borderWidth:1,pointRadius:0,borderDash:[3,3],fill:false});
+    datasets.push({label:'BB Mid',data:bb.map(b=>b.mid),borderColor:'rgba(61,155,255,0.3)',borderWidth:1,pointRadius:0,borderDash:[2,2],fill:false});
+    datasets.push({label:'BB Lower',data:bb.map(b=>b.lower),borderColor:'rgba(61,155,255,0.4)',borderWidth:1,pointRadius:0,borderDash:[3,3],
+      fill:{target:'-3',above:'rgba(61,155,255,0.04)'}});
+  }
+
+  ['mainChartPanel','rsiPanel','macdPanel','dmiPanel'].forEach(id=>{ document.getElementById(id).style.display=''; });
+
+  charts.main = new Chart(document.getElementById('mainChart').getContext('2d'), {
+    type:'line',
+    data:{labels, datasets},
+    options:{...gOpts,
+      plugins:{...gOpts.plugins,
+        legend:{display:true,labels:{color:'#7a8499',font:{size:9},boxWidth:20,usePointStyle:true}},
+        tooltip:{callbacks:{label:ctx=>{
+          if(ctx.dataset.label==='Close') return `Close: Rp ${ctx.raw?.toLocaleString('id-ID')||''}`;
+          return `${ctx.dataset.label}: Rp ${ctx.raw?.toLocaleString('id-ID')||''}`;
+        }}}
+      }
+    }
+  });
+
+  // VOLUME
+  charts.vol = new Chart(document.getElementById('volChart').getContext('2d'), {
+    type:'bar',
+    data:{labels, datasets:[{
+      data:volumes,
+      backgroundColor: data.map((d,i)=>d.close>=(i>0?data[i-1].close:d.close)?'rgba(0,201,122,0.5)':'rgba(255,61,90,0.5)'),
+      borderRadius:1,
+    }]},
+    options:{...gOpts,scales:{...gOpts.scales,y:{...gOpts.scales.y,ticks:{color:'#404a5e',font:{size:8},callback:v=>IDX.fmtK(v)}}},
+      plugins:{legend:{display:false}}}
+  });
+
+  // RSI
+  const lastRsi = rsi.filter(v=>v!==null).slice(-1)[0];
+  document.getElementById('rsiCurrent').textContent = lastRsi ? `RSI: ${lastRsi.toFixed(1)}` : '—';
+  document.getElementById('rsiCurrent').style.color = lastRsi > 70 ? 'var(--red)' : lastRsi < 30 ? 'var(--blue)' : 'var(--text)';
+
+  charts.rsi = new Chart(document.getElementById('rsiChart').getContext('2d'), {
+    type:'line',
+    data:{labels, datasets:[
+      {data:rsi,borderColor:'#a67fff',borderWidth:1.5,pointRadius:0,tension:0.2},
+      {data:new Array(rsi.length).fill(70),borderColor:'rgba(255,61,90,0.4)',borderWidth:1,pointRadius:0,borderDash:[4,4]},
+      {data:new Array(rsi.length).fill(30),borderColor:'rgba(61,155,255,0.4)',borderWidth:1,pointRadius:0,borderDash:[4,4]},
+    ]},
+    options:{...gOpts,scales:{...gOpts.scales,y:{...gOpts.scales.y,min:0,max:100,ticks:{color:'#404a5e',font:{size:8},stepSize:20}}},
+      plugins:{legend:{display:false}}}
+  });
+
+  // MACD
+  const lastMacd = macd.filter(v=>v!==null).slice(-1)[0];
+  const lastSig = macdSig.filter(v=>v!==null).slice(-1)[0];
+  document.getElementById('macdCurrent').textContent = lastMacd!==undefined ? `MACD:${lastMacd?.toFixed(1)} Sig:${lastSig?.toFixed(1)||'—'}` : '—';
+
+  charts.macd = new Chart(document.getElementById('macdChart').getContext('2d'), {
+    type:'bar',
+    data:{labels, datasets:[
+      {type:'line',label:'MACD',data:macd,borderColor:'#3d9bff',borderWidth:1.5,pointRadius:0,tension:0.2,order:1},
+      {type:'line',label:'Signal',data:macdSig,borderColor:'#f5a623',borderWidth:1.5,pointRadius:0,tension:0.2,order:2},
+      {label:'Histogram',data:histogram,backgroundColor:histogram.map(v=>(v||0)>=0?'rgba(0,201,122,0.6)':'rgba(255,61,90,0.6)'),borderRadius:1,order:3},
+    ]},
+    options:{...gOpts,plugins:{legend:{display:false}}}
+  });
+
+  // DMI
+  const lastPdi = pdi.filter(v=>v!==null).slice(-1)[0];
+  const lastMdi = mdi.filter(v=>v!==null).slice(-1)[0];
+  const lastAdx = adx.filter(v=>v!==null).slice(-1)[0];
+  document.getElementById('pdiCurrent').textContent = lastPdi?.toFixed(1)||'—';
+  document.getElementById('mdiCurrent').textContent = lastMdi?.toFixed(1)||'—';
+  document.getElementById('adxCurrent').textContent = lastAdx?.toFixed(1)||'—';
+  const dmiSig = document.getElementById('dmiSignal');
+  if (lastAdx > 25) {
+    if (lastPdi > lastMdi) { dmiSig.textContent='▲ BUY'; dmiSig.style.color='var(--green)'; }
+    else { dmiSig.textContent='▼ SELL'; dmiSig.style.color='var(--red)'; }
+  } else { dmiSig.textContent='— Sideways'; dmiSig.style.color='var(--text3)'; }
+
+  charts.dmi = new Chart(document.getElementById('dmiChart').getContext('2d'), {
+    type:'line',
+    data:{labels, datasets:[
+      {label:'+DI',data:pdi,borderColor:'#00c97a',borderWidth:1.5,pointRadius:0,tension:0.2},
+      {label:'-DI',data:mdi,borderColor:'#ff3d5a',borderWidth:1.5,pointRadius:0,tension:0.2},
+      {label:'ADX',data:adx,borderColor:'#3d9bff',borderWidth:1.5,pointRadius:0,tension:0.2},
+      {label:'25',data:new Array(adx.length).fill(25),borderColor:'rgba(255,255,255,0.15)',borderWidth:1,pointRadius:0,borderDash:[4,4]},
+    ]},
+    options:{...gOpts,plugins:{legend:{labels:{color:'#7a8499',font:{size:9},boxWidth:16,usePointStyle:true}}},
+      scales:{...gOpts.scales,y:{...gOpts.scales.y,min:0,max:80,ticks:{color:'#404a5e',font:{size:8}}}}}
+  });
+}
+
+// Auto-refresh if market open
+function scheduleRefresh() {
+  if (IDX.isMarketOpen() && currentTicker) {
+    setTimeout(()=>{ loadChart(); scheduleRefresh(); }, 5*60*1000);
+  } else {
+    setTimeout(scheduleRefresh, 60*1000);
+  }
+}
+
+// INIT
+const initTicker = urlT || 'BBCA';
+document.getElementById('tickerInput').value = initTicker;
+document.querySelectorAll('.qt').forEach(b=>{ if(b.textContent===initTicker) b.classList.add('active'); });
+loadChart();
+scheduleRefresh();
+</script>
+</body>
+</html>
